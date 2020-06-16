@@ -1,0 +1,16 @@
+beautifulsoup4==4.9.1
+certifi==2020.4.5.1
+chardet==3.0.4
+fake-useragent==0.1.11
+get==2019.4.13
+idna==2.9
+numpy==1.18.5
+post==2019.4.13
+public==2019.4.13
+pymongo==3.10.1
+query-string==2019.4.13
+request==2019.4.13
+requests==2.23.0
+soupsieve==2.0.1
+urllib3==1.25.9
+wincertstore==0.2
