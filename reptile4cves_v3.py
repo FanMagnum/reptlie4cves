@@ -8,7 +8,6 @@
 """
 
 import concurrent.futures
-import random
 import re
 import time
 import operator
@@ -27,7 +26,6 @@ headers = {
     'User-Agent': UserAgent().chrome
 }
 
-# proxy_ip_pool = get_proxy_ip()
 
 
 def get_matching_records(vendor, product, version):
@@ -38,23 +36,20 @@ def get_matching_records(vendor, product, version):
             "cpe_version": f"cpe:/a:{vendor}:{product}:{version}",
             "startIndex": 0
         }
-        # r = requests.get(url, params=params, headers=headers, proxies=random.choice(proxy_ip_pool))
-        requests.adapters.DEFAULT_RETRIES = 5
-        s = requests.session()
-        s.keep_alive = False
-        r = s.get(url, params=params, headers=headers)
+        r = requests.get(url, params=params, headers=headers)
         r.raise_for_status()
         r.encoding = r.apparent_encoding
         soup = BeautifulSoup(r.text, "html.parser")
+        r.close()
         matching_records = soup.find('strong', attrs={'data-testid': 'vuln-matching-records-count'}).get_text()
         matching_records = int(matching_records)
-        # print(f"matching_records: {matching_records}")
+        print(f"matching_records: {matching_records}")
         return matching_records
     except Exception as err:
         print('running in get_matching_records err')
         print(err)
         print('Failed')
-    # finally:
+    finally:
         return None
 
 
@@ -68,16 +63,11 @@ def get_one_page(index, vendor, product, version):
             "startIndex": index
         }
         # 设置重连次数
-        # r = requests.get(url, params=params, headers=headers, proxies=random.choice(proxy_ip_pool))
-        # r = requests.get(url, params=params, headers=headers, allow_redirects=False)
-        requests.adapters.DEFAULT_RETRIES = 5
-        s = requests.session()
-        s.keep_alive = False
-        r = s.get(url, params=params, headers=headers)
+        r = requests.get(url, params=params, headers=headers)
         r.raise_for_status()
         r.encoding = r.apparent_encoding
         soup = BeautifulSoup(r.text, "html.parser")
-        # r.close()
+        r.close()
         trs = soup.find_all('tr', attrs={'data-testid': re.compile(r'vuln-row-(\d+)?')})
         """
         text
@@ -128,7 +118,7 @@ def get_one_page(index, vendor, product, version):
         print('running in get_one_page err')
         print(err)
         print('Failed')
-    # finally:
+    finally:
         return []
 
 
@@ -145,7 +135,6 @@ def get_all_page(start_indexes, product):
 def get_one_product(product):
     try:
         matching_records = get_matching_records(**product)
-        print(f"{product['product']}:{product['version']}需要抓取{matching_records}条数据")
         if matching_records:
             pages = matching_records // 20 + 1
             start_indexes = []
@@ -157,7 +146,7 @@ def get_one_product(product):
             # print('Get one product res: ')
             # pprint(res)
             print('*' * 40)
-            print(f'-------------->{res["product"]}:{res["version"]}漏洞数为{len(res["cves"])}')
+            print(f'Get one product res len: {len(res["cves"])}')
             print('*' * 40)
             return res
         else:
@@ -169,19 +158,24 @@ def get_one_product(product):
         print('running in get_one_product err')
         print(err)
         print('Failed')
-    # finally:
+    finally:
         return {"vendor": product.get('vendor'), "product": product.get('product'),
                 "version": product.get('version'),
                 'cves': None}
 
 
 def get_all_product(products):
+    # 循环抓取每个应用cve 单IP稳定抓取 但是速度慢
     res = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-        res.extend(executor.map(get_one_product, products))
-    # res = reduce(operator.add, res)
-    # print("Get all products res")
-    # pprint(res)
+    # with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+    #     res.extend(executor.map(get_one_product, products))
+    # # res = reduce(operator.add, res)
+    # # print("Get all products res")
+    # # pprint(res)
+    for product in products:
+        print('product name', product['product'])
+        print('product version', product['version'])
+        res.append(get_one_product(product))
     return res
 
 
@@ -392,56 +386,9 @@ if __name__ == '__main__':
                 'product': 'yammer',
                 'version': '5.6.9'
             },
-            {
-                'vendor': 'xmind',
-                'product': 'xmind',
-                'version': '3.4.1'
-            },
-            {
-                'vendor': 'sublimetext',
-                'product': 'sublime_text_3',
-                'version': '3.1.1'
-            },
         ]
     }
 
-    # apps_info['products'] += [
-    #     {
-    #         'vendor': 'jetbrains',
-    #         'product': 'pycharm',
-    #         'version': f'3.1.{i}'
-    #     } for i in range(1, 5)
-    # ]
-    #
-    # apps_info['products'] += [
-    #     {
-    #         'vendor': 'cloudfoundry',
-    #         'product': 'cf-mysql-release',
-    #         'version': f'{i}'
-    #     } for i in range(1, 24)
-    # ]
-    # #
-    # apps_info['products'] += [
-    #     {
-    #         'vendor': 'apache',
-    #         'product': 'mod_python',
-    #         'version': f'2.{i}'
-    #     } for i in range(0, 8)
-    # ]
-    # apps_info['products'] += [
-    #     {
-    #         'vendor': 'appium',
-    #         'product': 'appium-chromedriver',
-    #         'version': f'2.0.{i}'
-    #     } for i in range(0, 11)
-    # ]
-    # apps_info['products'] += [
-    #     {
-    #         'vendor': 'google',
-    #         'product': 'chrome',
-    #         'version': f'76.0.3809.{i}'
-    #     } for i in range(0, 1)
-    # ]
     start_time = time.perf_counter()
     # 爬取数据
     print('Products nums ', len(apps_info['products']))

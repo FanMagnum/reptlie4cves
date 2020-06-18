@@ -27,6 +27,7 @@ headers = {
     'User-Agent': UserAgent().chrome
 }
 
+
 # proxy_ip_pool = get_proxy_ip()
 
 
@@ -54,7 +55,7 @@ def get_matching_records(vendor, product, version):
         print('running in get_matching_records err')
         print(err)
         print('Failed')
-    # finally:
+        # finally:
         return None
 
 
@@ -128,7 +129,7 @@ def get_one_page(index, vendor, product, version):
         print('running in get_one_page err')
         print(err)
         print('Failed')
-    # finally:
+        # finally:
         return []
 
 
@@ -169,7 +170,7 @@ def get_one_product(product):
         print('running in get_one_product err')
         print(err)
         print('Failed')
-    # finally:
+        # finally:
         return {"vendor": product.get('vendor'), "product": product.get('product'),
                 "version": product.get('version'),
                 'cves': None}
@@ -404,48 +405,64 @@ if __name__ == '__main__':
             },
         ]
     }
+    apps_info['products'] += [
+        {
+            'vendor': 'jetbrains',
+            'product': 'pycharm',
+            'version': f'3.1.{i}'
+        } for i in range(1, 5)
+    ]
 
-    # apps_info['products'] += [
-    #     {
-    #         'vendor': 'jetbrains',
-    #         'product': 'pycharm',
-    #         'version': f'3.1.{i}'
-    #     } for i in range(1, 5)
-    # ]
+    apps_info['products'] += [
+        {
+            'vendor': 'cloudfoundry',
+            'product': 'cf-mysql-release',
+            'version': f'{i}'
+        } for i in range(1, 24)
+    ]
     #
-    # apps_info['products'] += [
-    #     {
-    #         'vendor': 'cloudfoundry',
-    #         'product': 'cf-mysql-release',
-    #         'version': f'{i}'
-    #     } for i in range(1, 24)
-    # ]
-    # #
-    # apps_info['products'] += [
-    #     {
-    #         'vendor': 'apache',
-    #         'product': 'mod_python',
-    #         'version': f'2.{i}'
-    #     } for i in range(0, 8)
-    # ]
-    # apps_info['products'] += [
-    #     {
-    #         'vendor': 'appium',
-    #         'product': 'appium-chromedriver',
-    #         'version': f'2.0.{i}'
-    #     } for i in range(0, 11)
-    # ]
-    # apps_info['products'] += [
-    #     {
-    #         'vendor': 'google',
-    #         'product': 'chrome',
-    #         'version': f'76.0.3809.{i}'
-    #     } for i in range(0, 1)
-    # ]
+    apps_info['products'] += [
+        {
+            'vendor': 'apache',
+            'product': 'mod_python',
+            'version': f'2.{i}'
+        } for i in range(0, 8)
+    ]
+    apps_info['products'] += [
+        {
+            'vendor': 'appium',
+            'product': 'appium-chromedriver',
+            'version': f'2.0.{i}'
+        } for i in range(0, 11)
+    ]
+    apps_info['products'] += [
+        {
+            'vendor': 'google',
+            'product': 'chrome',
+            'version': f'76.0.3809.{i}'
+        } for i in range(0, 1)
+    ]
+
     start_time = time.perf_counter()
     # 爬取数据
     print('Products nums ', len(apps_info['products']))
-    res = {'pcid': apps_info.get('pcid'), 'apps': get_all_product(apps_info.get("products"))}
+    # res = {'pcid': apps_info.get('pcid'), 'apps': get_all_product(apps_info.get("products"))}
+    res = {'pcid': apps_info.get('pcid'), 'apps': []}
+    length = len(apps_info['products'])
+    start = 0
+    end = 20
+    while length > 0:
+        tmp = apps_info.get('products')[start:end]
+        print('slice products', tmp)
+        print('len slice products', len(tmp))
+        res['apps'].extend(get_all_product(tmp))
+        start = end
+        end += 20
+        length -= 20
+        print(f"length: {length}")
+        # time.sleep(2)
+    # 更新数据到mongo
+    pprint(res['apps'])
     # 更新数据到mongo
     write_data_to_mongo(res)
     end_time = time.perf_counter()

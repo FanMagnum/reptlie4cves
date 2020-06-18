@@ -17,5 +17,6 @@ cursor = collection.find()
 for i in cursor:
     print(i['pcid'])
     apps = i['apps']
-    for j in apps:
-        print(j)
+    print(len(apps))
+    for app in apps:
+        print(app)

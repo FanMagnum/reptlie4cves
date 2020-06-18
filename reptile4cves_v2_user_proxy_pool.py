@@ -39,16 +39,21 @@ def get_matching_records(vendor, product, version):
             "startIndex": 0
         }
         # r = requests.get(url, params=params, headers=headers, proxies=random.choice(proxy_ip_pool))
-        requests.adapters.DEFAULT_RETRIES = 5
-        s = requests.session()
-        s.keep_alive = False
-        r = s.get(url, params=params, headers=headers)
+        r = requests.get(url, params=params, headers=headers)
+        # if r.status_code == 403:
+        #     retry = 2
+        #     while r.status_code == 403 and retry > 0:
+        #         time.sleep(5)
+        #         print('running in 403 loop')
+        #         r = requests.get(url, params=params, headers=headers)
+        #         retry -= 1
         r.raise_for_status()
         r.encoding = r.apparent_encoding
         soup = BeautifulSoup(r.text, "html.parser")
+        r.close()
         matching_records = soup.find('strong', attrs={'data-testid': 'vuln-matching-records-count'}).get_text()
         matching_records = int(matching_records)
-        # print(f"matching_records: {matching_records}")
+        print(f"matching_records: {matching_records}")
         return matching_records
     except Exception as err:
         print('running in get_matching_records err')
@@ -69,15 +74,18 @@ def get_one_page(index, vendor, product, version):
         }
         # 设置重连次数
         # r = requests.get(url, params=params, headers=headers, proxies=random.choice(proxy_ip_pool))
-        # r = requests.get(url, params=params, headers=headers, allow_redirects=False)
-        requests.adapters.DEFAULT_RETRIES = 5
-        s = requests.session()
-        s.keep_alive = False
-        r = s.get(url, params=params, headers=headers)
+        r = requests.get(url, params=params, headers=headers)
+        # if r.status_code == 403:
+        #     retry = 2
+        #     while r.status_code == 403 and retry > 0:
+        #         time.sleep(5)
+        #         print('running in 403 loop')
+        #         r = requests.get(url, params=params, headers=headers)
+        #         retry -= 1
         r.raise_for_status()
         r.encoding = r.apparent_encoding
         soup = BeautifulSoup(r.text, "html.parser")
-        # r.close()
+        r.close()
         trs = soup.find_all('tr', attrs={'data-testid': re.compile(r'vuln-row-(\d+)?')})
         """
         text
@@ -145,7 +153,6 @@ def get_all_page(start_indexes, product):
 def get_one_product(product):
     try:
         matching_records = get_matching_records(**product)
-        print(f"{product['product']}:{product['version']}需要抓取{matching_records}条数据")
         if matching_records:
             pages = matching_records // 20 + 1
             start_indexes = []
@@ -157,7 +164,7 @@ def get_one_product(product):
             # print('Get one product res: ')
             # pprint(res)
             print('*' * 40)
-            print(f'-------------->{res["product"]}:{res["version"]}漏洞数为{len(res["cves"])}')
+            print(f'Get one product res len: {len(res["cves"])}')
             print('*' * 40)
             return res
         else:
@@ -405,43 +412,43 @@ if __name__ == '__main__':
         ]
     }
 
-    # apps_info['products'] += [
-    #     {
-    #         'vendor': 'jetbrains',
-    #         'product': 'pycharm',
-    #         'version': f'3.1.{i}'
-    #     } for i in range(1, 5)
-    # ]
+    apps_info['products'] += [
+        {
+            'vendor': 'jetbrains',
+            'product': 'pycharm',
+            'version': f'3.1.{i}'
+        } for i in range(1, 5)
+    ]
+
+    apps_info['products'] += [
+        {
+            'vendor': 'cloudfoundry',
+            'product': 'cf-mysql-release',
+            'version': f'{i}'
+        } for i in range(1, 24)
+    ]
     #
-    # apps_info['products'] += [
-    #     {
-    #         'vendor': 'cloudfoundry',
-    #         'product': 'cf-mysql-release',
-    #         'version': f'{i}'
-    #     } for i in range(1, 24)
-    # ]
-    # #
-    # apps_info['products'] += [
-    #     {
-    #         'vendor': 'apache',
-    #         'product': 'mod_python',
-    #         'version': f'2.{i}'
-    #     } for i in range(0, 8)
-    # ]
-    # apps_info['products'] += [
-    #     {
-    #         'vendor': 'appium',
-    #         'product': 'appium-chromedriver',
-    #         'version': f'2.0.{i}'
-    #     } for i in range(0, 11)
-    # ]
-    # apps_info['products'] += [
-    #     {
-    #         'vendor': 'google',
-    #         'product': 'chrome',
-    #         'version': f'76.0.3809.{i}'
-    #     } for i in range(0, 1)
-    # ]
+    apps_info['products'] += [
+        {
+            'vendor': 'apache',
+            'product': 'mod_python',
+            'version': f'2.{i}'
+        } for i in range(0, 8)
+    ]
+    apps_info['products'] += [
+        {
+            'vendor': 'appium',
+            'product': 'appium-chromedriver',
+            'version': f'2.0.{i}'
+        } for i in range(0, 11)
+    ]
+    apps_info['products'] += [
+        {
+            'vendor': 'google',
+            'product': 'chrome',
+            'version': f'76.0.3809.{i}'
+        } for i in range(0, 50)
+    ]
     start_time = time.perf_counter()
     # 爬取数据
     print('Products nums ', len(apps_info['products']))
