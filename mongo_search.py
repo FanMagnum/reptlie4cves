@@ -20,3 +20,4 @@ for i in cursor:
     print(len(apps))
     for app in apps:
         print(app)
+    # print(i)
