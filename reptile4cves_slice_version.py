@@ -123,7 +123,6 @@ def get_one_page(index, vendor, product, version):
 def get_all_page(start_indexes, app):
     res = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-        # res.extend(executor.map(get_one_page, start_indexes))
         res.extend(executor.map(partial(get_one_page, **app), start_indexes))
     res = reduce(operator.add, res)
     return res
