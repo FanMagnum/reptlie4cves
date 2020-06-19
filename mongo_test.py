@@ -17,7 +17,7 @@ condition = {
     'product': 'chrome',
     'version': f'76.0.3809.0'
 }
-products = collection.find(condition)
+products = collection.find()
 print(type(products))
 for product in products:
     print(product)

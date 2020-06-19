@@ -6,6 +6,7 @@
 @file: mongo_search.py
 @time: 2020/6/16 14:01
 """
+from pprint import pprint
 
 import pymongo
 
@@ -17,7 +18,7 @@ cursor = collection.find()
 for i in cursor:
     print(i['pcid'])
     apps = i['apps']
-    print(len(apps))
-    for app in apps:
-        print(app)
-    # print(i)
+    print(f"app nums:{len(apps)}")
+    # for app in apps:
+    #     pprint(app)
+    pprint(i)

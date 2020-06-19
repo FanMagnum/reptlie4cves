@@ -8,6 +8,8 @@
 """
 
 from fake_useragent import UserAgent
+import requests
 
-for i in range(100):
-    print(UserAgent().random)
+print('a'*280)
+
+
