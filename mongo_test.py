@@ -15,9 +15,9 @@ collection = db.apps
 condition = {
     'vendor': 'google',
     'product': 'chrome',
-    'version': f'76.0.3809.0'
+    'version': '80.0.3987.87'
 }
-products = collection.find()
+products = collection.find(condition)
 print(type(products))
 for product in products:
     print(product)

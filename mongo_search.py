@@ -14,11 +14,11 @@ client = pymongo.MongoClient(host='localhost')
 db = client.cves
 collection = db.info
 
-cursor = collection.find()
+cursor = collection.find({'_id': '4567'})
 for i in cursor:
-    print(i['pcid'])
-    apps = i['apps']
-    print(f"app nums:{len(apps)}")
+    # print(i['pcid'])
+    # apps = i['apps']
+    # print(f"app nums:{len(apps)}")
     # for app in apps:
-    #     pprint(app)
+    #     print(app)
     pprint(i)
