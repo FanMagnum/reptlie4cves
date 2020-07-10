@@ -9,15 +9,18 @@
 
 import pymongo
 
-client = pymongo.MongoClient(host='localhost')
+client = pymongo.MongoClient(host='10.240.200.1')
 db = client.cves
 collection = db.apps
 condition = {
-    'vendor': 'google',
-    'product': 'chrome',
-    'version': '80.0.3987.87'
+    'vendor': 'microsoft',
+    'product': 'office',
+    'version': '2017'
 }
-products = collection.find(condition)
+products = collection.find_one(condition)
 print(type(products))
-for product in products:
-    print(product)
+print(products)
+print(len(products['cves']))
+# collection.delete_one(products)
+# for product in products:
+# #     print(product)

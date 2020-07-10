@@ -1,0 +1,576 @@
+#!/usr/bin/env python
+# encoding: utf-8
+"""
+@author: Lone
+@email: fanml@neusoft.com
+@file: reptile4cves.py
+@time: 2020/6/16 9:55
+"""
+
+import concurrent.futures
+import json
+import random
+import re
+import time
+import operator
+from functools import reduce, partial
+from pprint import pprint
+
+import requests
+from fake_useragent import UserAgent
+from bs4 import BeautifulSoup
+import pymongo
+import psycopg2
+
+# from proxy_pool import get_proxy_ip
+
+url = 'https://nvd.nist.gov/vuln/search/results'
+
+headers = {
+    'User-Agent': UserAgent().random
+}
+
+
+postgre_config = {
+    'dbname': 'cves',
+    'user': 'postgres',
+    'password': '123456',
+    'host': '10.176.48.190',
+    'port': 5432
+}
+
+
+# proxy_ip_pool = get_proxy_ip()
+
+
+def get_matching_records(product, installed_date, vendor=None, version='-'):
+    try:
+        if vendor:
+            params = {
+                "form_type": "Advanced",
+                "cves": "on",
+                "cpe_version": f"cpe:/a:{vendor}:{product}:{version}",
+                "startIndex": 0
+            }
+        else:
+            params = {
+                "form_type": "Advanced",
+                "cves": "on",
+                "cpe_version": f"cpe:/a::{product}:{version}",
+                "startIndex": 0
+            }
+        # 增加重连次数
+        requests.adapters.DEFAULT_RETRIES = 5
+        s = requests.session()
+        # 关闭多余连接
+        s.keep_alive = False
+        r = s.get(url, params=params, headers=headers)
+        r.raise_for_status()
+        r.encoding = r.apparent_encoding
+        soup = BeautifulSoup(r.text, "html.parser")
+        r.close()
+        matching_records = soup.find('strong', attrs={'data-testid': 'vuln-matching-records-count'}).get_text()
+        matching_records = matching_records.replace(',', '')
+        matching_records = int(matching_records)
+        if matching_records > 100:
+            matching_records = 100
+        return matching_records
+    except Exception as err:
+        print('running in get_matching_records err')
+        print(err)
+        print('Failed')
+        return None
+
+
+def get_one_page(index, product, installed_date, vendor=None, version='-'):
+    try:
+        cve_info = []
+        if vendor:
+            params = {
+                "form_type": "Advanced",
+                "cves": "on",
+                "cpe_version": f"cpe:/a:{vendor}:{product}:{version}",
+                "startIndex": index
+            }
+        else:
+            params = {
+                "form_type": "Advanced",
+                "cves": "on",
+                "cpe_version": f"cpe:/a::{product}:{version}",
+                "startIndex": index
+            }
+        # 增加重连次数
+        requests.adapters.DEFAULT_RETRIES = 5
+        s = requests.session()
+        # 关闭多余连接
+        s.keep_alive = False
+        r = s.get(url, params=params, headers=headers)
+        r.raise_for_status()
+        r.encoding = r.apparent_encoding
+        soup = BeautifulSoup(r.text, "html.parser")
+        r.close()
+        trs = soup.find_all('tr', attrs={'data-testid': re.compile(r'vuln-row-(\d+)?')})
+        """
+        text
+        \n\nCVE-2020-6498\n\n\nIncorrect implementation in user interface in Google Chrome on iOS prior to 83.0.4103.88
+         allowed a remote attacker to perform domain spoofing via a crafted HTML page.
+         \nPublished:\nJune 03, 2020; 07:15:12 PM -04:00\n\n\n\nV3.1: 6.5 MEDIUM\n\n\n\xa0\xa0\xa0\xa0V2: 4.3 MEDIUM\n\n\n'
+        """
+        for tr in trs:
+            tr = tr.get_text()
+            tr = tr.replace('\n', '').replace('\xa0', '')
+            # print(tr)
+            find = (
+                re.search(r'(?P<cve>CVE-\d{4}-\d{4,5})(?P<summary>.*?)(?P<published>Published:.*?)(?P<level>V.*)', tr)
+            )
+            find_dict = find.groupdict()
+            if 'HIGH' in find_dict['level'] or 'CRITICAL' in find_dict['level']:
+                # V3.1: 6.5 MEDIUMV2: 4.3 MEDIUM
+                score = level = None
+                str_list = find_dict['level'].split('V')
+                # ['', '3.1: 6.5 LOW', '2: 4.3 CRITICAL']
+                try:
+                    if 'HIGH' in str_list[1] or 'CRITICAL' in str_list[1]:
+                        level_score = str_list[1].split()
+                        score = level_score[1]
+                        level = level_score[2]
+                    else:
+                        level_score = str_list[2].split()
+                        score = level_score[1]
+                        level = level_score[2]
+                except IndexError:
+                    pass
+                tmp = {
+                    'cve': find_dict.get('cve'),
+                    'summary': find_dict.get('summary'),
+                    'published': find_dict.get('published'),
+                    'level': level,
+                    'score': score,
+                    'detail': f'https://nvd.nist.gov/vuln/detail/{find_dict.get("cve")}',
+                }
+                cve_info.append(tmp)
+        return cve_info
+    except Exception as err:
+        print('running in get_one_page err')
+        print(err)
+        print('Failed')
+        return []
+
+
+def get_all_page(start_indexes, app):
+    res = []
+    for start_index in start_indexes:
+        print(f'start_index: {start_index}')
+        res.append(get_one_page(start_index, **app))
+    # with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+    #     res.extend(executor.map(partial(get_one_page, **app), start_indexes))
+    res = reduce(operator.add, res)
+    return res
+
+
+def get_one_app(app):
+    # print(f"app: {app}")
+    conn = psycopg2.connect(**postgre_config)
+    try:
+        # 先去apps库里查找是否有记录
+        # client = pymongo.MongoClient(host='localhost')
+        # client = pymongo.MongoClient(host='10.240.200.1')
+        # db = client.cves
+        # collection = db.apps
+        # condition = {'vendor': app.get('vendor'), 'product': app.get('product'), 'version': app.get('version')}
+        # res = collection.find_one(condition)
+        cursor = conn.cursor()
+        # sql = """SELECT * FROM appinfo where CAST(app->'vendor')=%s and CAST(app->'product')=%s and CAST(app->'version')=%s;"""
+        sql = """SELECT app FROM appinfo WHERE (appinfo.app :: json ->> 'vendor') = %s
+                 AND (appinfo.app :: json ->> 'product') = %s 
+                 AND (appinfo.app :: json ->> 'version') = %s;"""
+        params = (app.get('vendor'), app.get('product'), app.get('version'))
+        cursor.execute(sql, params)
+        res = cursor.fetchone()
+        if res is None:
+            # 没有记录，启动爬虫
+            print("==============================>Running in spider")
+
+            matching_records = get_matching_records(**app)
+            print(f'matching_records: {matching_records}')
+            if matching_records:
+                pages = matching_records // 20 + 1
+                start_indexes = []
+                for i in range(pages):
+                    start_indexes.append(i * 20)
+                res = {'vendor': app.get('vendor'), 'product': app.get('product'),
+                       'version': app.get('version'),
+                       'cves': get_all_page(start_indexes, app)}
+                print('*' * 40)
+                print(f'Get one product res len: {len(res["cves"])}')
+                print('*' * 40)
+                # 爬取后数据加入apps库
+                # collection.insert_one(res)
+                # res['installed_date'] = app.get('installed_date')
+                # return res
+            else:
+                # NATIONAL VULNERABILITY DATABASE没有收录此版本信息 cve为None
+                res = {'vendor': app.get('vendor'), 'product': app.get('product'),
+                       'version': app.get('version'), 'cves': None}
+                # collection.insert_one(res)
+                # res['installed_date'] = app.get('installed_date')
+                # return res
+            # collection.insert_one(res)
+            sql = """INSERT INTO appinfo (app) VALUES (%s);"""
+            params = (json.dumps(res),)
+            cursor.execute(sql, params)
+            res['installed_date'] = app.get('installed_date')
+            print(f'spider res: {res}')
+            # res.pop('_id')
+            return res
+        else:
+            # apps库中有记录直接返回
+            res = res[0]
+            res['installed_date'] = app.get('installed_date')
+            return res
+    except Exception as err:
+        # 爬取过程中报错 返回None
+        print('running in get_one_app err')
+        print(err)
+        print('Failed')
+        return {"vendor": app.get('vendor'), "product": app.get('product'),
+                "version": app.get('version'), "installed_date": app.get('installed_date'),
+                'cves': None}
+    finally:
+        conn.commit()
+        conn.close()
+
+
+def get_all_app(apps):
+    res = []
+    for app in apps:
+        print(f'app: {app}')
+        res.append(get_one_app(app))
+    # with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+    #     res.extend(executor.map(get_one_app, apps))
+    return res
+
+
+def write_data_to_db(data):
+    # client = pymongo.MongoClient(host='localhost')
+    print(f"apps to str: {str(data.get('apps'))}")
+    conn = psycopg2.connect(**postgre_config)
+    cursor = conn.cursor()
+    sql = """SELECT * FROM cveinfo where pcid = %s;"""
+    params = (data.get('pcid'),)
+    cursor.execute(sql, params)
+    agent = cursor.fetchone()
+    print(f"-------------------agent info: {agent}")
+    if agent:
+        sql = """update cveinfo set apps = %s where pcid = %s;"""
+        params = (json.dumps(data.get('apps')), data.get('pcid'))
+    else:
+        sql = """INSERT INTO cveinfo (pcid, apps) VALUES (%s, %s);"""
+        params = (data.get('pcid'), json.dumps(data.get('apps')))
+    cursor.execute(sql, params)
+    print('update or create data to postgreSQL successfully')
+    conn.commit()
+    conn.close()
+
+
+if __name__ == '__main__':
+    # 将kafka数据解析为以下格式
+    apps_info = {
+        'pcid': 'd5ec78f7-447c-42ab-8664-d7fe47215ab3',
+        "apps": [
+            {
+                "vendor": "google",
+                "product": "chrome",
+                "version": "83.0.4103.110",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "apache",
+                "product": "tomcat",
+                "version": "7.0.91",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "apache",
+                "product": "http_server",
+                "version": "2.4.39",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "oracle",
+                "product": "mysql",
+                "version": "5.7.15",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "mongoosejs",
+                "product": "mongoose",
+                "version": "4.2.9",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "git",
+                "product": "git",
+                "version": "2.22.1",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "tencent",
+                "product": "foxmail ",
+                "version": "7.2.11.304",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "postgresql",
+                "product": "postgresql",
+                "version": "10.1",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "getpostman",
+                "product": "postman",
+                "version": "4.3.3",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "jetbrains",
+                "product": "pycharm",
+                "version": "3.4.2",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "mozilla",
+                "product": "firefox",
+                "version": "70.0.2",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "apple",
+                "product": "apple_remote_desktop",
+                "version": "2.1.1",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "navicat",
+                "product": "navicat",
+                "version": "10.1",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "wireshark",
+                "product": "wireshark",
+                "version": "3.0.1",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "anynines",
+                "product": "elasticsearch",
+                "version": "2.1.1",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "anynines",
+                "product": "logme",
+                "version": "2.1.3",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "anynines",
+                "product": "mongodb",
+                "version": "2.1.3",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "teamviewer",
+                "product": "teamviewer",
+                "version": "11.0.224043",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "mobatek",
+                "product": "mobaxterm",
+                "version": "11.2",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "wazuh",
+                "product": "wazuh",
+                "version": "2.1.2",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "74cms",
+                "product": "74cms",
+                "version": "5.0.2",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "acronis",
+                "product": "components_for_remote_installation",
+                "version": "11.0.17319",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "afterlogic",
+                "product": "aurora",
+                "version": "8.3.12",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "beyondtrust",
+                "product": "remote_support",
+                "version": "9.2.4",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "apache",
+                "product": "openoffice",
+                "version": "2.4.4",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "adobe",
+                "product": "flash_player",
+                "version": "28.0.0.127",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "add-in-express",
+                "product": "duplicate_remover_for_microsoft_excel",
+                "version": "2.5.1",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "microsoft",
+                "product": "visual_studio_code",
+                "version": "2019.5.18876",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "microsoft",
+                "product": "excel",
+                "version": "2015",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "microsoft",
+                "product": "ie",
+                "version": "5.00.2919.6308",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "microsoft",
+                "product": "office",
+                "version": "2005",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "microsoft",
+                "product": "office",
+                "version": "2017",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "microsoft",
+                "product": "powerpoint",
+                "version": "2013",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "microsoft",
+                "product": "powerpoint",
+                "version": "2016",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "microsoft",
+                "product": "visio",
+                "version": "2016",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "microsoft",
+                "product": "word",
+                "version": "16.0.11929.20198",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "microsoft",
+                "product": "yammer",
+                "version": "5.6.9",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "xmind",
+                "product": "xmind",
+                "version": "3.4.1",
+                "installed_date": "2020-06-12"
+            },
+            {
+                "vendor": "sublimetext",
+                "product": "sublime_text_3",
+                "version": "3.1.1",
+                "installed_date": "2020-06-12"
+            },
+        ]
+    }
+    apps_info['apps'] += [
+        {
+            'vendor': 'jetbrains',
+            'product': 'pycharm',
+            'version': f'3.2.{i}',
+            'installed_date': '2020-06-12'
+        } for i in range(1, 5)
+    ]
+
+    # apps_info['apps'] += [
+    #     {
+    #         'vendor': 'cloudfoundry',
+    #         'product': 'cf-mysql-release',
+    #         'version': f'{i}'
+    #     } for i in range(1, 24)
+    # ]
+    # #
+    # apps_info['apps'] += [
+    #     {
+    #         'vendor': 'apache',
+    #         'product': 'mod_python',
+    #         'version': f'2.{i}'
+    #     } for i in range(0, 8)
+    # ]
+    # apps_info['apps'] += [
+    #     {
+    #         'vendor': 'appium',
+    #         'product': 'appium-chromedriver',
+    #         'version': f'2.0.{i}'
+    #     } for i in range(0, 11)
+    # ]
+    # apps_info['apps'] += [
+    #     {
+    #         'vendor': 'google',
+    #         'product': 'chrome',
+    #         'version': f'76.0.3809.{i}'
+    #     } for i in range(1, 16)
+    # ]
+
+    start_time = time.perf_counter()
+    # 爬取数据
+    print('apps nums ', len(apps_info['apps']))
+    # res = {'pcid': apps_info.get('pcid'), 'apps': get_all_app(apps_info.get("apps"))}
+    res = {'pcid': apps_info.get('pcid'), 'apps': []}
+    length = len(apps_info['apps'])
+    start = 0
+    end = 20
+    while length > 0:
+        tmp = apps_info.get('apps')[start:end]
+        res['apps'].extend(get_all_app(tmp))
+        start = end
+        end += 20
+        length -= 20
+        print(f"length: {length}")
+    print(len(res['apps']))
+    # 更新数据到mongo
+    pprint(f'pop res {res}')
+    write_data_to_db(res)
+    end_time = time.perf_counter()
+    print('Finish in {} seconds'.format(end_time - start_time))

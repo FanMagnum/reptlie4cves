@@ -59,6 +59,8 @@ def get_matching_records(product, installed_date, vendor=None, version='-'):
         matching_records = soup.find('strong', attrs={'data-testid': 'vuln-matching-records-count'}).get_text()
         matching_records = matching_records.replace(',', '')
         matching_records = int(matching_records)
+        if matching_records > 100:
+            matching_records = 100
         return matching_records
     except Exception as err:
         print('running in get_matching_records err')
@@ -139,9 +141,12 @@ def get_one_page(index, product, installed_date, vendor=None, version='-'):
 
 def get_all_page(start_indexes, app):
     res = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-        res.extend(executor.map(partial(get_one_page, **app), start_indexes))
-    res = reduce(operator.add, res)
+    for start_index in start_indexes:
+        print(f'start_index: {start_index}')
+        res.append(get_one_page(start_index, **app))
+    # with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+    #     res.extend(executor.map(partial(get_one_page, **app), start_indexes))
+    # res = reduce(operator.add, res)
     return res
 
 
@@ -205,6 +210,9 @@ def get_one_app(app):
 
 def get_all_app(apps):
     res = []
+    # for app in apps:
+    #     print(f'app: {app}')
+    #     res.append(get_one_app(app))
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
         res.extend(executor.map(get_one_app, apps))
     return res
@@ -232,202 +240,240 @@ if __name__ == '__main__':
     # 将kafka数据解析为以下格式
     apps_info = {
         'pcid': '4567',
-        'apps': [
+        "apps": [
             {
-                # 'vendor': 'google',
-                'product': 'chrome',
-                # 'version': '80.0.3987.84',
-                'installed_date': '2017-05-12'
+                "vendor": "google",
+                "product": "chrome",
+                "version": "83.0.4103.110",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'apache',
-                'product': 'tomcat',
-                'version': '7.0.92'
+                "vendor": "apache",
+                "product": "tomcat",
+                "version": "7.0.91",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'apache',
-                'product': 'http_server',
-                'version': '2.4.38'
+                "vendor": "apache",
+                "product": "http_server",
+                "version": "2.4.39",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'oracle',
-                'product': 'mysql',
-                'version': '5.7.14'
+                "vendor": "oracle",
+                "product": "mysql",
+                "version": "5.7.15",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'mongoosejs',
-                'product': 'mongoose',
-                'version': '4.2.8'
+                "vendor": "mongoosejs",
+                "product": "mongoose",
+                "version": "4.2.9",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'git',
-                'product': 'git',
-                'version': '2.22.0'
+                "vendor": "git",
+                "product": "git",
+                "version": "2.22.1",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'tencent',
-                'product': 'foxmail ',
-                'version': '7.2.11.303'
+                "vendor": "tencent",
+                "product": "foxmail ",
+                "version": "7.2.11.304",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'postgresql',
-                'product': 'postgresql',
-                'version': '10.0'
+                "vendor": "postgresql",
+                "product": "postgresql",
+                "version": "10.1",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'getpostman',
-                'product': 'postman',
-                'version': '4.3.2'
+                "vendor": "getpostman",
+                "product": "postman",
+                "version": "4.3.3",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'jetbrains',
-                'product': 'pycharm',
-                'version': '3.4.1'
+                "vendor": "jetbrains",
+                "product": "pycharm",
+                "version": "3.4.2",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'mozilla',
-                'product': 'firefox',
-                'version': '70.0.1'
+                "vendor": "mozilla",
+                "product": "firefox",
+                "version": "70.0.2",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'apple',
-                'product': 'apple_remote_desktop',
-                'version': '2.1.0'
+                "vendor": "apple",
+                "product": "apple_remote_desktop",
+                "version": "2.1.1",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'navicat',
-                'product': 'navicat',
-                'version': '10.0'
+                "vendor": "navicat",
+                "product": "navicat",
+                "version": "10.1",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'wireshark',
-                'product': 'wireshark',
-                'version': '3.0.0'
+                "vendor": "wireshark",
+                "product": "wireshark",
+                "version": "3.0.1",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'anynines',
-                'product': 'elasticsearch',
-                'version': '2.1.0'
+                "vendor": "anynines",
+                "product": "elasticsearch",
+                "version": "2.1.1",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'anynines',
-                'product': 'logme',
-                'version': '2.1.2'
+                "vendor": "anynines",
+                "product": "logme",
+                "version": "2.1.3",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'anynines',
-                'product': 'mongodb',
-                'version': '2.1.2'
+                "vendor": "anynines",
+                "product": "mongodb",
+                "version": "2.1.3",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'teamviewer',
-                'product': 'teamviewer',
-                'version': '11.0.224042'
+                "vendor": "teamviewer",
+                "product": "teamviewer",
+                "version": "11.0.224043",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'mobatek',
-                'product': 'mobaxterm',
-                'version': '11.1'
+                "vendor": "mobatek",
+                "product": "mobaxterm",
+                "version": "11.2",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'wazuh',
-                'product': 'wazuh',
-                'version': '2.1.1'
+                "vendor": "wazuh",
+                "product": "wazuh",
+                "version": "2.1.2",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': '74cms',
-                'product': '74cms',
-                'version': '5.0.1'
+                "vendor": "74cms",
+                "product": "74cms",
+                "version": "5.0.2",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'acronis',
-                'product': 'components_for_remote_installation',
-                'version': '11.0.17318'
+                "vendor": "acronis",
+                "product": "components_for_remote_installation",
+                "version": "11.0.17319",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'afterlogic',
-                'product': 'aurora',
-                'version': '8.3.11'
+                "vendor": "afterlogic",
+                "product": "aurora",
+                "version": "8.3.12",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'beyondtrust',
-                'product': 'remote_support',
-                'version': '9.2.3'
+                "vendor": "beyondtrust",
+                "product": "remote_support",
+                "version": "9.2.4",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'apache',
-                'product': 'openoffice',
-                'version': '2.4.3'
+                "vendor": "apache",
+                "product": "openoffice",
+                "version": "2.4.4",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'adobe',
-                'product': 'flash_player',
-                'version': '28.0.0.126'
+                "vendor": "adobe",
+                "product": "flash_player",
+                "version": "28.0.0.127",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'add-in-express',
-                'product': 'duplicate_remover_for_microsoft_excel',
-                'version': '2.5.0'
+                "vendor": "add-in-express",
+                "product": "duplicate_remover_for_microsoft_excel",
+                "version": "2.5.1",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'microsoft',
-                'product': 'visual_studio_code',
-                'version': '2019.5.18875'
+                "vendor": "microsoft",
+                "product": "visual_studio_code",
+                "version": "2019.5.18876",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'microsoft',
-                'product': 'excel',
-                'version': '2013'
+                "vendor": "microsoft",
+                "product": "excel",
+                "version": "2015",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'microsoft',
-                'product': 'ie',
-                'version': '5.00.2919.6307'
+                "vendor": "microsoft",
+                "product": "ie",
+                "version": "5.00.2919.6308",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'microsoft',
-                'product': 'office',
-                'version': '2003'
+                "vendor": "microsoft",
+                "product": "office",
+                "version": "2005",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'microsoft',
-                'product': 'office',
-                'version': '2019'
+                "vendor": "microsoft",
+                "product": "office",
+                "version": "2017",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'microsoft',
-                'product': 'powerpoint',
-                'version': '2013'
+                "vendor": "microsoft",
+                "product": "powerpoint",
+                "version": "2013",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'microsoft',
-                'product': 'powerpoint',
-                'version': '2016'
+                "vendor": "microsoft",
+                "product": "powerpoint",
+                "version": "2016",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'microsoft',
-                'product': 'visio',
-                'version': '2016'
+                "vendor": "microsoft",
+                "product": "visio",
+                "version": "2016",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'microsoft',
-                'product': 'word',
-                'version': '16.0.11929.20198'
+                "vendor": "microsoft",
+                "product": "word",
+                "version": "16.0.11929.20198",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'microsoft',
-                'product': 'yammer',
-                'version': '5.6.9'
+                "vendor": "microsoft",
+                "product": "yammer",
+                "version": "5.6.9",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'xmind',
-                'product': 'xmind',
-                'version': '3.4.1'
+                "vendor": "xmind",
+                "product": "xmind",
+                "version": "3.4.1",
+                "installed_date": "2020-06-12"
             },
             {
-                'vendor': 'sublimetext',
-                'product': 'sublime_text_3',
-                'version': '3.1.1'
+                "vendor": "sublimetext",
+                "product": "sublime_text_3",
+                "version": "3.1.1",
+                "installed_date": "2020-06-12"
             },
         ]
     }
@@ -435,39 +481,40 @@ if __name__ == '__main__':
         {
             'vendor': 'jetbrains',
             'product': 'pycharm',
-            'version': f'3.1.{i}'
+            'version': f'3.2.{i}',
+            'installed_date': '2020-06-12'
         } for i in range(1, 5)
     ]
 
-    apps_info['apps'] += [
-        {
-            'vendor': 'cloudfoundry',
-            'product': 'cf-mysql-release',
-            'version': f'{i}'
-        } for i in range(1, 24)
-    ]
-    #
-    apps_info['apps'] += [
-        {
-            'vendor': 'apache',
-            'product': 'mod_python',
-            'version': f'2.{i}'
-        } for i in range(0, 8)
-    ]
-    apps_info['apps'] += [
-        {
-            'vendor': 'appium',
-            'product': 'appium-chromedriver',
-            'version': f'2.0.{i}'
-        } for i in range(0, 11)
-    ]
-    apps_info['apps'] += [
-        {
-            'vendor': 'google',
-            'product': 'chrome',
-            'version': f'76.0.3809.{i}'
-        } for i in range(1, 16)
-    ]
+    # apps_info['apps'] += [
+    #     {
+    #         'vendor': 'cloudfoundry',
+    #         'product': 'cf-mysql-release',
+    #         'version': f'{i}'
+    #     } for i in range(1, 24)
+    # ]
+    # #
+    # apps_info['apps'] += [
+    #     {
+    #         'vendor': 'apache',
+    #         'product': 'mod_python',
+    #         'version': f'2.{i}'
+    #     } for i in range(0, 8)
+    # ]
+    # apps_info['apps'] += [
+    #     {
+    #         'vendor': 'appium',
+    #         'product': 'appium-chromedriver',
+    #         'version': f'2.0.{i}'
+    #     } for i in range(0, 11)
+    # ]
+    # apps_info['apps'] += [
+    #     {
+    #         'vendor': 'google',
+    #         'product': 'chrome',
+    #         'version': f'76.0.3809.{i}'
+    #     } for i in range(1, 16)
+    # ]
 
     start_time = time.perf_counter()
     # 爬取数据
